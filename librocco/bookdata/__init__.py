@@ -17,11 +17,6 @@ def feed_book(book, couchdb, db_name):
         # Update the price
         doc["price"] = book["price"]
         couchdb.post_document(db=db_name, document=doc)
-    else:
+    elif not doc:
         # Create a new document
-        try:
-            couchdb.put_document(db=db_name, doc_id=doc_id, document=book)
-        except:
-            import pdb
-
-            pdb.set_trace()
+        couchdb.put_document(db=db_name, doc_id=doc_id, document=book)
