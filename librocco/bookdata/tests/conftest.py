@@ -1,4 +1,3 @@
-from ibmcloudant import CouchDbSessionAuthenticator
 from ibmcloudant.cloudant_v1 import CloudantV1
 from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
 import pytest
@@ -36,7 +35,7 @@ def wait_for_couchdb_to_be_ready(url, timeout=60):
 
 @pytest.fixture(scope="session")
 def couchdb_url():
-    if os.environ["COUCHDB_URL"]:
+    if os.environ.get("COUCHDB_URL"):
         yield os.environ["COUCHDB_URL"]
         return
     port = get_free_port()

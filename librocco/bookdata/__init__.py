@@ -9,13 +9,14 @@ def feed_book(book, couchdb, db_name):
     doc_id = f"books/{book['isbn']}"
     # See if the book is already in the database
     try:
-        doc = couchdb.get_document(db=db_name, doc_id=doc_id)
+        doc = couchdb.get_document(db=db_name, doc_id=doc_id).get_result()
     except ApiException:
         doc = None
+    
     if doc:
         # Update the price
         doc["price"] = book["price"]
-        couchdb.update_document(db=db_name, doc_id=doc_id, doc=doc)
+        couchdb.post_document(db=db_name, document=doc)
     else:
         # Create a new document
         couchdb.put_document(db=db_name, doc_id=doc_id, document=book)
