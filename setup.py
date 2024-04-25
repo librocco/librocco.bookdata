@@ -8,7 +8,7 @@ setup(
         'couchdb',
     ],
     extras_require={
-        'test': ['pytest'],
+        'test': ['pytest', 'docker'],
     },
     author='Silvio Tomatis',
     author_email='silvio@codemyriad.io',
