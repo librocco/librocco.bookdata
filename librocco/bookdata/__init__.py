@@ -1,5 +1,21 @@
-def feed_book(bookdata, dbconnection):
+from ibm_cloud_sdk_core.api_exception import ApiException
+
+
+def feed_book(book, couchdb, db_name):
     """Takes a dictionary with book data and a database connection.
     Checks if the book is already in the db. If it is, only the price will be updated.
     If it's not, a new document will be created.
     """
+    doc_id = f"books/{book['isbn']}"
+    # See if the book is already in the database
+    try:
+        doc = couchdb.get_document(db=db_name, doc_id=doc_id)
+    except ApiException:
+        doc = None
+    if doc:
+        # Update the price
+        doc["price"] = book["price"]
+        couchdb.update_document(db=db_name, doc_id=doc_id, doc=doc)
+    else:
+        # Create a new document
+        couchdb.put_document(db=db_name, doc_id=doc_id, document=book)

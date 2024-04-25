@@ -62,7 +62,13 @@ def couchdb_url():
 
 
 @pytest.fixture(scope="function")
-def couchdb(couchdb_url):
+def db_name():
+    """Generates a random database name."""
+    return ''.join(random.choice(string.ascii_lowercase) for _ in range(10))
+
+
+@pytest.fixture(scope="function")
+def couchdb(couchdb_url, db_name):
     """Connects to couchdb and returns a db object.
     It creates a database with a random name and deletes it after the test.
     """
@@ -71,14 +77,11 @@ def couchdb(couchdb_url):
     client = CloudantV1(authenticator=authenticator)
     client.set_service_url(couchdb_url)
 
-    # Generate a random database name
-    db_name = ''.join(random.choice(string.ascii_lowercase) for _ in range(10))
-
     # Create the database
     client.put_database(db=db_name)
     print(f"Created database {db_name}")
 
-    yield db_name
+    yield client
 
     # After the test, delete the database
     print(f"Deleting {db_name}...")
