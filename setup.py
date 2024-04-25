@@ -7,6 +7,7 @@ setup(
     install_requires=[
         "ibmcloudant",
         "click",
+        "tqdm",
     ],
     extras_require={
         "test": ["pytest", "docker"],
