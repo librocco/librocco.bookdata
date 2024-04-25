@@ -38,7 +38,7 @@ def make_db_connection(url):
     service = CloudantV1(authenticator=authenticator)
 
     # Set the service URL
-    service.set_service_url(url)
+    service.set_service_url(parsed_url.geturl()[: -len(parsed_url.path) + 1])
 
     return service, parsed_url.path[1:]
 

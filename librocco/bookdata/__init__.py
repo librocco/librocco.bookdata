@@ -13,10 +13,15 @@ def feed_book(book, couchdb, db_name):
     except ApiException:
         doc = None
 
-    if doc:
+    if doc and doc["price"] != book["price"]:
         # Update the price
         doc["price"] = book["price"]
         couchdb.post_document(db=db_name, document=doc)
     else:
         # Create a new document
-        couchdb.put_document(db=db_name, doc_id=doc_id, document=book)
+        try:
+            couchdb.put_document(db=db_name, doc_id=doc_id, document=book)
+        except:
+            import pdb
+
+            pdb.set_trace()
