@@ -1,7 +1,13 @@
+from ibmcloudant import CouchDbSessionAuthenticator
+from ibmcloudant.cloudant_v1 import CloudantV1
+from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
 import pytest
 import docker
 import socket
+import os
+import random
 import requests
+import string
 import time
 
 
@@ -30,6 +36,9 @@ def wait_for_couchdb_to_be_ready(url, timeout=60):
 
 @pytest.fixture(scope="session")
 def couchdb_url():
+    if os.environ["COUCHDB_URL"]:
+        yield os.environ["COUCHDB_URL"]
+        return
     port = get_free_port()
     client = docker.from_env()
     print(f"Starting CouchDB container on port {port}...")
@@ -50,3 +59,28 @@ def couchdb_url():
     container.stop()
     container.remove()
     print("CouchDB container stopped and removed.")
+
+
+@pytest.fixture(scope="function")
+def couchdb(couchdb_url):
+    """Connects to couchdb and returns a db object.
+    It creates a database with a random name and deletes it after the test.
+    """
+    # Connect to the CouchDB server using username "admin" and password "secret"
+    authenticator = BasicAuthenticator("admin", "secret")
+    client = CloudantV1(authenticator=authenticator)
+    client.set_service_url(couchdb_url)
+
+    # Generate a random database name
+    db_name = ''.join(random.choice(string.ascii_lowercase) for _ in range(10))
+
+    # Create the database
+    client.put_database(db=db_name)
+    print(f"Created database {db_name}")
+
+    yield db_name
+
+    # After the test, delete the database
+    print(f"Deleting {db_name}...")
+    client.delete_database(db=db_name)
+    print(f"Deleted database {db_name}")
