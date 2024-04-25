@@ -6,6 +6,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "ibmcloudant",
+        "click",
     ],
     extras_require={
         "test": ["pytest", "docker"],
