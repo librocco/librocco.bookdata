@@ -1,4 +1,3 @@
-
 def test_feed_book(couchdb, db_name):
     from librocco.bookdata import feed_book
 
@@ -17,7 +16,7 @@ def test_feed_book(couchdb, db_name):
     couchdb.get_document(db=db_name, doc_id="books/9780316769488")
 
     feed_book(dict(book, title="NO", price=1), couchdb, db_name)
-    doc =  couchdb.get_document(db=db_name, doc_id="books/9780316769488").get_result()
+    doc = couchdb.get_document(db=db_name, doc_id="books/9780316769488").get_result()
 
     assert doc["title"] == "The Catcher in the Rye"
     assert doc["price"] == 1

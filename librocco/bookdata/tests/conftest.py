@@ -12,7 +12,7 @@ import time
 
 def get_free_port():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(('', 0))
+    s.bind(("", 0))
     address, port = s.getsockname()
     s.close()
     return port
@@ -42,10 +42,10 @@ def couchdb_url():
     client = docker.from_env()
     print(f"Starting CouchDB container on port {port}...")
     container = client.containers.run(
-        "couchdb:latest", 
-        detach=True, 
-        ports={'5984/tcp': port}, 
-        environment={"COUCHDB_USER": "admin", "COUCHDB_PASSWORD": "secret"}
+        "couchdb:latest",
+        detach=True,
+        ports={"5984/tcp": port},
+        environment={"COUCHDB_USER": "admin", "COUCHDB_PASSWORD": "secret"},
     )
     url = f"http://localhost:{port}"
 
@@ -63,7 +63,7 @@ def couchdb_url():
 @pytest.fixture(scope="function")
 def db_name():
     """Generates a random database name."""
-    return ''.join(random.choice(string.ascii_lowercase) for _ in range(10))
+    return "".join(random.choice(string.ascii_lowercase) for _ in range(10))
 
 
 @pytest.fixture(scope="function")

@@ -12,7 +12,7 @@ def feed_book(book, couchdb, db_name):
         doc = couchdb.get_document(db=db_name, doc_id=doc_id).get_result()
     except ApiException:
         doc = None
-    
+
     if doc:
         # Update the price
         doc["price"] = book["price"]
