@@ -4,7 +4,7 @@ from tqdm import tqdm
 from urllib.parse import urlparse
 from ibmcloudant.cloudant_v1 import CloudantV1
 from ibm_cloud_sdk_core.authenticators import BasicAuthenticator
-
+from multiprocessing import Process, Queue, Value, Lock
 from librocco.bookdata import feed_book
 
 
@@ -12,35 +12,63 @@ from librocco.bookdata import feed_book
 @click.argument("csv_file", type=click.Path(exists=True))
 @click.argument("db_url")
 def main(csv_file, db_url):
-    """A click command that loops over the given CSV file"""
     couchdb, db_name = make_db_connection(db_url)
-    updated_books_num = 0
-    new_books_num = 0
 
-    # Use nonlocal keyword to modify the counter in the enclosing scope
-    def inc_updated():
-        nonlocal updated_books_num
-        updated_books_num += 1
-        updated_books_bar.update(1)  # Update progress bar for updated books
+    # Shared counters with lock for thread-safe increments
+    updated_books_num = Value("i", 0)
+    new_books_num = Value("i", 0)
 
-    def inc_new():
-        nonlocal new_books_num
-        new_books_num += 1
-        new_books_bar.update(1)  # Update progress bar for new books
+    # Lock for updating progress bars
+    lock = Lock()
 
     with open(csv_file, "r") as file:
         reader = csv.DictReader(file, delimiter="|")
         processed_books_bar = tqdm(
             total=number_of_rows(open(csv_file, "r")), desc="Processed Books"
         )
-        updated_books_bar = tqdm(
-            total=0, desc="Updated Books"
-        )  # Start at zero and increase
-        new_books_bar = tqdm(total=0, desc="New Books")  # Start at zero and increase
+        updated_books_bar = tqdm(total=0, desc="Updated Books")
+        new_books_bar = tqdm(total=0, desc="New Books")
+
+        # Worker function adapted for multiprocessing
+        def process_books(queue):
+            while True:
+                row = queue.get()
+                if row is None:  # Poison pill means shutdown
+                    break
+                book = convert_book(row)
+                feed_book(
+                    book,
+                    couchdb,
+                    db_name,
+                    lambda: inc_counter(updated_books_num, updated_books_bar, lock),
+                    lambda: inc_counter(new_books_num, new_books_bar, lock),
+                )
+                lock.acquire()
+                processed_books_bar.update(1)
+                lock.release()
+
+        # Helper function to safely increment counters and update progress bars
+        def inc_counter(counter, bar, lock):
+            with lock:
+                counter.value += 1
+                bar.update(1)
+
+        # Create a queue and populate it with data rows
+        queue = Queue()
         for row in reader:
-            book = convert_book(row)
-            feed_book(book, couchdb, db_name, inc_updated=inc_updated, inc_new=inc_new)
-            processed_books_bar.update(1)  # Update progress bar for each processed book
+            queue.put(row)
+
+        # Start worker processes
+        workers = []
+        for _ in range(40):  # Number of workers
+            p = Process(target=process_books, args=(queue,))
+            p.start()
+            workers.append(p)
+            queue.put(None)  # Each worker gets a poison pill for termination
+
+        # Wait for all workers to complete
+        for p in workers:
+            p.join()
 
         processed_books_bar.close()
         updated_books_bar.close()
@@ -48,34 +76,21 @@ def main(csv_file, db_url):
 
 
 def number_of_rows(file):
-    file.seek(0)  # Go to the beginning of the file
-    return len(file.readlines()) - 1  # Subtract one to exclude the header line
+    file.seek(0)
+    return len(file.readlines()) - 1
 
 
 def make_db_connection(url):
-    """
-    Take a URL and return a couchdb connection plus a db name
-    """
     parsed_url = urlparse(url)
-
-    # Extract the username and password
     username = parsed_url.username
     password = parsed_url.password
-
-    # Create a BasicAuthenticator
     authenticator = BasicAuthenticator(username, password)
-
-    # Create a CloudantV1 instance
     service = CloudantV1(authenticator=authenticator)
-
-    # Set the service URL
     service.set_service_url(parsed_url.geturl()[: -len(parsed_url.path) + 1])
-
     return service, parsed_url.path[1:]
 
 
 def convert_book(row):
-    """Convert a row from the CSV file into a dictionary"""
     return {
         "title": row["titolo"],
         "authors": row["autore"],
