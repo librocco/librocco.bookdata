@@ -1,5 +1,6 @@
 import click
 import csv
+import sys
 from tqdm import tqdm
 from urllib.parse import urlparse
 from ibmcloudant.cloudant_v1 import CloudantV1
@@ -12,6 +13,7 @@ from librocco.bookdata import feed_book
 @click.argument("csv_file", type=click.Path(exists=True))
 @click.argument("db_url")
 def main(csv_file, db_url):
+    workers = []
     couchdb, db_name = make_db_connection(db_url)
 
     # Shared counters with lock for thread-safe increments
@@ -28,43 +30,42 @@ def main(csv_file, db_url):
         )
         updated_books_bar = tqdm(total=0, desc="Updated Books")
         new_books_bar = tqdm(total=0, desc="New Books")
-
-        # Worker function adapted for multiprocessing
-        def process_books(queue):
-            while True:
-                row = queue.get()
-                if row is None:  # Poison pill means shutdown
-                    break
-                book = convert_book(row)
-                feed_book(
-                    book,
-                    couchdb,
-                    db_name,
-                    lambda: inc_counter(updated_books_num, updated_books_bar, lock),
-                    lambda: inc_counter(new_books_num, new_books_bar, lock),
-                )
-                lock.acquire()
-                processed_books_bar.update(1)
-                lock.release()
-
-        # Helper function to safely increment counters and update progress bars
-        def inc_counter(counter, bar, lock):
-            with lock:
-                counter.value += 1
-                bar.update(1)
-
         # Create a queue and populate it with data rows
         queue = Queue()
         for row in reader:
             queue.put(row)
 
+    # Worker function adapted for multiprocessing
+    def process_books(queue):
+        while True:
+            row = queue.get()
+            if row is None:  # Poison pill means shutdown
+                break
+            book = convert_book(row)
+            feed_book(
+                book,
+                couchdb,
+                db_name,
+                lambda: inc_counter(updated_books_num, updated_books_bar, lock),
+                lambda: inc_counter(new_books_num, new_books_bar, lock),
+            )
+            lock.acquire()
+            processed_books_bar.update(1)
+            lock.release()
+
+    # Helper function to safely increment counters and update progress bars
+    def inc_counter(counter, bar, lock):
+        with lock:
+            counter.value += 1
+            bar.update(1)
+
+    try:
         # Start worker processes
-        workers = []
-        for _ in range(40):  # Number of workers
+        for _ in range(4):  # Number of workers
             p = Process(target=process_books, args=(queue,))
             p.start()
             workers.append(p)
-            queue.put(None)  # Each worker gets a poison pill for termination
+            queue.put(None)  # Send termination signal in advance
 
         # Wait for all workers to complete
         for p in workers:
@@ -73,6 +74,18 @@ def main(csv_file, db_url):
         processed_books_bar.close()
         updated_books_bar.close()
         new_books_bar.close()
+
+    except KeyboardInterrupt:
+        print("Caught KeyboardInterrupt, terminating workers")
+        for p in workers:
+            p.terminate()
+        for p in workers:
+            p.join()
+        # Properly close all progress bars to avoid broken output
+        processed_books_bar.close()
+        updated_books_bar.close()
+        new_books_bar.close()
+        print("Done")
 
 
 def number_of_rows(file):
