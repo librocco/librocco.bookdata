@@ -10,9 +10,12 @@ from librocco.bookdata import feed_book
 
 
 @click.command()
+@click.option(
+    "--concurrency", default=4, type=int, help="Set the number of concurrent processes."
+)
 @click.argument("csv_file", type=click.Path(exists=True))
 @click.argument("db_url")
-def main(csv_file, db_url):
+def main(csv_file, db_url, concurrency):
     workers = []
     couchdb, db_name = make_db_connection(db_url)
 
@@ -61,24 +64,17 @@ def main(csv_file, db_url):
 
     try:
         # Start worker processes
-        for _ in range(4):  # Number of workers
+        for _ in range(concurrency):  # Number of workers
             p = Process(target=process_books, args=(queue,))
             p.start()
             workers.append(p)
             queue.put(None)  # Send termination signal in advance
 
-        # Wait for all workers to complete
-        for p in workers:
-            p.join()
-
-        processed_books_bar.close()
-        updated_books_bar.close()
-        new_books_bar.close()
-
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt, terminating workers")
         for p in workers:
             p.terminate()
+    finally:
         for p in workers:
             p.join()
         # Properly close all progress bars to avoid broken output
